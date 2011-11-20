@@ -1,0 +1,162 @@
+
+
+27-Feb-2011
+
+
+Build the Bootloader (STM32VL-Discovery only)
+-----------------------------------------------
+
+Extract the Versaloon-BL.tgz file , and extract the FW-Discovery.tar.gz (Bootloader source)
+
+1: "cd" to FW-Discovery
+2: make
+3: Now the bootloader is in : FW-Discovery/Project/GCC/Versaloon-bl_GCC.bin
+
+
+NOTE !! - The bootloader doesn't wotk for the STM8S board atm. there is no "Button to activate the bootloader with" , but this might change later (using one of the SWD/SWIM pins).
+
+
+
+Programming the Bootloader into the ST-Link Chip
+-------------------------------------------------
+To load the bootloader into the STM32VL "ST-Link Chip" , See Tim's description here http://takenapart.com/?p=82 , 
+for soldering the two SWD wires on the board. And for programming hints under windows.
+
+I use an allready converted STM32VL to program the bootloader into the new STM32VL board in Linux.
+
+My steps are like this
+
+SW:
+-----
+1: Start OOCD (I have both a signalyzer jtag for the STM8S-Discoverys , and a STM32VL (vsllink-swd.cfg) , but i must use SWD for programming a STM32VL "ST-Link Chip"
+sudo openocd -f interface/signalyzer-lite.cfg -f target/stm32.cfg
+sudo openocd -f interface/vsllink-swd.cfg -f target/stm32.cfg 
+
+
+In another "window"
+2:
+telnet localhost 4444
+
+3: (Always , as i think Simon protects the flash in the BL) 
+  stm32x unlock 0
+
+4:
+reset halt
+flash probe 0
+stm32x mass_erase 0
+
+flash write_bank 0 <path>/Versaloon-bl_GCC.bin 0
+
+Now you are done , and must disconnect/connect the usb cable , fot the USB subsystem to detect it as a "Maple bootloader device".
+
+
+
+Programming Versaloon into the ST-Link Chip , using the bootloader
+-------------------------------------------------------------------
+
+I have allready included a Versaloon-bl_GCC.bin , that is build to start on 
+
+1: Activate the Bootloader
+   Disconnect the USB cable from the STM32VL , hold the "Black Reset" button down while inserting the USB Cable again.
+   Release the button , the LED should be off , and the Bootloader is activated.
+
+2: Program Versaloon into the STM32VL via vsprog and the Bootloader 
+   sudo vsprog -sstm32 -mi -C/dev/ttyACM0 -I Versaloon-STM32VL-0x8200.hex -oe -owf -ovf
+
+3: Disconnect/connect the usb cable , and check if it detected by Versaloon
+   sudo vsprog -L 
+
+
+
+
+
+
+NOTE : The STM32VL-Discovery Versaloon must be build to start on 0x8002000 , instead if 0x8000000  (Bootloader takes up the first 0x2000)
+
+There are two placed in the Versaloon source one have to edit if you use the bootloader , and want to build versaloon from scratch.
+Because the bootloader takes up the first 8KB in the chip , Versaloon must be build to start on address 0x8002000 , instead if 0x8000000
+
+1: In the linkerfile , dongle/firmware/Projects/st-discovery.ld
+Comment or replace like below.
+
+    /* FLASH (rx) : ORIGIN = 0x8000000, LENGTH = 64K*/
+    FLASH (rx) : ORIGIN = 0x8002000, LENGTH = 56K
+
+
+
+2: In the boardfile , dongle/firmware/Projects/board_defs.mk
+The FLASH_LOAD_OFFSET must be changed from 0x0000 to 0x2000 to reflect the same offset by 8K
+
+    ########################################################################
+    ifeq ($(HW_BOARD),STM32VL_Discovery)
+    ########################################################################
+    _HARDWARE_VER = 0x33
+    FLASH_LOAD_OFFSET = 0x2000
+    HSE_VALUE = 8000000
+    LD_FILE = st-discovery.ld
+    TARGET_STM32 = MediumDensity
+    else
+
+
+
+
+
+Sample output , programming via VSPROG.
+------------------------------------------------------
+
+It fails in verify (-ovf) - Maybe Simon can tell why  ?
+
+
+$ sudo vsprog -sstm32 -mi -C/dev/ttyACM0 -oe -owf -ovf -I Versaloon-STM32VL-0x8200.hex
+VSProg 1.0 svn:669M
+CopyRight(c) 2008-2010 by SimonQian <SimonQian@SimonQian.com>
+
+URL: http://www.SimonQian.com/en/Versaloon
+mail: SimonQian@SimonQian.com
+
+Info:   Chip name undefined, try auto-detecting.
+Info:   Bootloader version 2.0
+Info:   STM32 type: medium-density device
+Info:   Flash memory size: 64 KB
+Info:   Chip-id read is 0x410.
+Info:   Auto-detect signature is 0x410
+Info:   stm32_md found
+Warning:5 is invalid for hex type, current line ignored!!
+Info:   Bootloader version 2.0
+Info:   STM32 type: medium-density device
+Info:   Flash memory size: 64 KB
+Info:   Chip-id read is 0x410.
+Info:   erasing flash
+erasing flash |========================================%100| 1.25s used
+Info:   flash erased
+Info:   Bootloader version 2.0
+Info:   programming flash
+writing flash |========================================%100| 2.28s used
+Info:   flash programmed for 19456bytes(8.33KB/s)
+Info:   verifying flash
+reading flash |%00| 0.08s used
+Error:  Fail to read flash.
+Error:  Fail to operate stm32.
+Error:  Fail to run command: operate.
+
+
+
+Disconnect - Connect USB cable , to activate Versaloon
+And then verify that a Versaloon is seen
+------------------------------------------------------------------------
+$ sudo vsprog -L
+Supported Programmer by Versaloon driver:
+Versaloon0: 0x0483:0x5740:B045BA400FF7986FFCF0FFF7 on 039.
+
+
+If Versaloon is allready running on the board , one can enter the Bootloader by this command : 
+
+vsprog -Z   (The led should turn off , indicating BL is active)
+
+
+27-Feb-2011
+Bingo
+
+
+
+
